@@ -32,5 +32,16 @@ struct GameBoardScene: View {
                 Text("Failed to load game with error: \(gameStoreError.localizedDescription)")
             }
         }
+        .onAppear {
+            Task {
+                do {
+                    let game = try await gameStore.loadGame(gameID: gameID)
+                    let session = GameSession(gameState: game)
+                    self.boardState = .loaded(session)
+                } catch let error as GameRepositoryError {
+                    self.boardState = .failed(error)
+                }
+            }
+        }
     }
 }

@@ -50,7 +50,9 @@ final class GameRepository {
             .sorted { $0.lastUpdatedAt > $1.lastUpdatedAt }
     }
 
-    func loadGame(gameID: GameID) async throws -> GameState {
+    func loadGame(
+        gameID: GameID
+    ) async throws(GameRepositoryError) -> GameState {
         if let cached = gamesByID[gameID] { return cached }
         
         let persisted = try await storage.loadGame(id: gameID)
@@ -69,7 +71,7 @@ final class GameRepository {
     @discardableResult
     func saveGame(
         gameState: GameState
-    ) async throws -> GameState {
+    ) async throws(GameRepositoryError) -> GameState {
         gamesByID[gameState.id] = gameState
 
         let persisted = try await storage.saveGame(state: gameState)

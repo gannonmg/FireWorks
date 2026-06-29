@@ -79,8 +79,12 @@ struct NewGameView: View {
     private func startGame() {
         Task {
             let config = viewModel.makeNewGameConfig()
-            let newGame = try await gameStore.createGame(config: config)
-            gameRouter.push(.gameBoard(newGame.id))
+            do {
+                let newGame = try await gameStore.createGame(config: config)
+                gameRouter.push(.gameBoard(newGame.id))
+            } catch {
+                print("Error: \(error.localizedDescription)")
+            }
         }
     }
 }

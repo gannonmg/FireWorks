@@ -5,16 +5,17 @@
 //  Created by Matt Gannon on 6/23/26.
 //
 
+import Foundation
 import Observation
 
-enum GameSessionError: Error {
+enum GameSessionError: LocalizedError {
     case noHandForPlayer(Player.ID)
     case engineError(GameEngineError)
 
     var localizedDescription: String {
         switch self {
         case .noHandForPlayer(let id):
-            "Could not find a hind for player id \(id)"
+            "Could not find a hand for player id \(id)"
         case .engineError(let gameEngineError):
             "Received engine error \(gameEngineError.localizedDescription)"
         }

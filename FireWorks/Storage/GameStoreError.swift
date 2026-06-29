@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum GameRepositoryError: Error {
+enum GameRepositoryError: LocalizedError {
     case gameNotFound(id: GameID)
 
     var localizedDescription: String {

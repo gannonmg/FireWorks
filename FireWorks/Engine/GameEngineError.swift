@@ -5,7 +5,9 @@
 //  Created by Matt Gannon on 6/24/26.
 //
 
-public enum GameEngineError: Error {
+import Foundation
+
+public enum GameEngineError: LocalizedError {
     case invalidHint(reason: InvalidHintReason)
     case exceededHandLimit(playerId: Player.ID)
     case cardNotInHand(cardID: Card.ID, playerID: Player.ID)

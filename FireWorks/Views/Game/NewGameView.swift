@@ -33,7 +33,7 @@ final class NewGameViewModel {
 struct NewGameView: View {
 
     @Environment(GameRouter.self) private var gameRouter
-    @Environment(GameStore.self) private var gameStore
+    @Environment(GameRepository.self) private var gameStore
 
     @State private var viewModel = NewGameViewModel()
 
@@ -91,6 +91,6 @@ struct NewGameView: View {
     NavigationStack(path: $router.path) {
         NewGameView()
             .environment(router)
-            .environment(GameStore(storage: MockGameStorage()))
+            .environment(GameRepository(storage: MockGameStorage()))
     }
 }

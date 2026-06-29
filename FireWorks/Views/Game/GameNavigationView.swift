@@ -10,7 +10,7 @@ import SwiftUI
 struct GameNavigationView: View {
 
     @State private var gameRouter = GameRouter()
-    @State private var gameStore = GameStore(storage: MockGameStorage())
+    @State private var gameStore = GameRepository(storage: MockGameStorage())
 
     var body: some View {
         NavigationStack(path: $gameRouter.path) {

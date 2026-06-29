@@ -1,5 +1,5 @@
 //
-//  GameStoreError.swift
+//  GameRepositoryError.swift
 //  FireWorks
 //
 //  Created by Matt Gannon on 6/26/26.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum GameStoreError: Error {
+enum GameRepositoryError: Error {
     case gameNotFound(id: GameID)
 
     var localizedDescription: String {

@@ -1,5 +1,5 @@
 //
-//  GameStore.swift
+//  GameRepository.swift
 //  FireWorks
 //
 //  Created by Matt Gannon on 6/25/26.
@@ -8,10 +8,10 @@
 import Foundation
 
 protocol GameStorageInterface: Actor {
-    func loadSummaries() async throws(GameStoreError) -> [GameSummary]
-    func loadGame(id: GameID) async throws(GameStoreError) -> PersistedGame
-    @discardableResult func saveGame(state: GameState) async throws(GameStoreError) -> PersistedGame
-    func deleteGame(id: GameID) async throws(GameStoreError)
+    func loadSummaries() async throws(GameRepositoryError) -> [GameSummary]
+    func loadGame(id: GameID) async throws(GameRepositoryError) -> PersistedGame
+    @discardableResult func saveGame(state: GameState) async throws(GameRepositoryError) -> PersistedGame
+    func deleteGame(id: GameID) async throws(GameRepositoryError)
 }
 
 struct NewGameConfig {
@@ -23,15 +23,15 @@ struct NewGameConfig {
      */
 }
 
-// MARK: - GameStore
+// MARK: - GameRepository
 /**
- Observable GameStore to be propogated via the environment.
+ Observable GameRepository to be propogated via the environment.
  Accepts a generic GameStorageInterface that handles the storing and retrieving of games.
  */
 
 @MainActor
 @Observable
-final class GameStore {
+final class GameRepository {
 
     // MARK: Properties
     private(set) var summaries: [GameSummary] = []
@@ -78,7 +78,7 @@ final class GameStore {
     }
 }
 
-private extension GameStore {
+private extension GameRepository {
     func upsertSummary(_ summary: GameSummary) {
         if let index = summaries.firstIndex(where: { $0.id == summary.id }) {
             summaries[index] = summary
@@ -95,23 +95,23 @@ private extension GameStore {
 actor MockGameStorage: GameStorageInterface {
     private var storage: [GameID: PersistedGame] = [:]
 
-    func loadSummaries() async throws(GameStoreError) -> [GameSummary] {
+    func loadSummaries() async throws(GameRepositoryError) -> [GameSummary] {
         storage.values.map(\.summary)
     }
 
-    func loadGame(id: GameID) async throws(GameStoreError) -> PersistedGame {
+    func loadGame(id: GameID) async throws(GameRepositoryError) -> PersistedGame {
         guard let game = storage[id] else { throw .gameNotFound(id: id) }
         return game
     }
 
     @discardableResult
-    func saveGame(state: GameState) async throws(GameStoreError) -> PersistedGame {
+    func saveGame(state: GameState) async throws(GameRepositoryError) -> PersistedGame {
         let persistedGame = storage[state.id]?.updated(with: state) ?? PersistedGame(gameState: state)
         storage[state.id] = persistedGame
         return persistedGame
     }
 
-    func deleteGame(id: GameID) async throws(GameStoreError) {
+    func deleteGame(id: GameID) async throws(GameRepositoryError) {
         storage.removeValue(forKey: id)
     }
 }

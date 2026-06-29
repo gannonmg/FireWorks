@@ -13,10 +13,10 @@ struct GameBoardScene: View {
     private enum BoardState {
         case loading
         case loaded(GameSession)
-        case failed(GameStoreError)
+        case failed(GameRepositoryError)
     }
 
-    @Environment(GameStore.self) private var gameStore
+    @Environment(GameRepository.self) private var gameStore
     @State private var boardState: BoardState = .loading
 
     let gameID: GameID

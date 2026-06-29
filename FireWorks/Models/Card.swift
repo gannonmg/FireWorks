@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Card: Identifiable, Hashable, Sendable {
+public struct Card: Storable {
     public let id: String
     public let color: CardColor
     public let number: CardNumber

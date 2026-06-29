@@ -5,7 +5,7 @@
 //  Created by Matt Gannon on 6/23/26.
 //
 
-public enum Hint: Hashable, Sendable {
+public enum Hint: Hashable, Sendable, Codable {
     case color(CardColor)
     case number(CardNumber)
 }

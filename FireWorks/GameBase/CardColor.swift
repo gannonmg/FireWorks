@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-public enum CardColor: CaseIterable, Hashable, Sendable {
+public enum CardColor: CaseIterable, Hashable, Sendable, Codable {
 
     case red, yellow, purple, green, blue
 

@@ -5,7 +5,7 @@
 //  Created by Matt Gannon on 6/23/26.
 //
 
-public enum CardNumber: Int, CaseIterable, Hashable, Sendable {
+public enum CardNumber: Int, CaseIterable, Hashable, Sendable, Codable {
 
     case one = 1, two, three, four, five
 

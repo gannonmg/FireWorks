@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Player: Identifiable, Hashable, Sendable {
-    public let id = UUID()
-    var cards: [Card] = []
+public struct Player: Storable {
+    public private(set) var id = UUID()
+    public let displayName: String
 }

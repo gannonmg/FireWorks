@@ -10,31 +10,38 @@ import OrderedCollections
 
 public enum GameEngine {
     public static func apply(
-        playerAction: PlayerAction,
+        gameAction: GameAction,
         to gameState: GameState
     ) throws(GameEngineError) -> GameState {
-
+        let actingPlayerID = gameState.currentPlayerID
         var stateCopy = gameState
+        var events: [GameEvent] = []
 
-        switch playerAction {
+        switch gameAction {
+        case .dealCards:
+            try dealCards(gameState: &stateCopy, events: &events)
+
         case .play(let cardID):
-            stateCopy = try playCard(cardID: cardID, gameState: stateCopy)
-
-            // Append this move to the game log
-            stateCopy.history.append(.played(cardID: cardID, playerID: stateCopy.currentPlayerID))
+            try playCard(cardID: cardID, gameState: &stateCopy, events: &events)
 
         case .discard(let cardID):
-            stateCopy = try discard(cardID: cardID, gameState: stateCopy)
-
-            // Append this move to the game log
-            stateCopy.history.append(.discarded(cardID: cardID, playerID: stateCopy.currentPlayerID))
+            try discard(cardID: cardID, gameState: &stateCopy, events: &events)
 
         case .giveHint(let hint, let toPlayerID):
-            stateCopy = try giveHint(hint: hint, toPlayerID: toPlayerID, gameState: stateCopy)
-
-            // Append this move to the game log
-            stateCopy.history.append(.gaveHint(hint: hint, toPlayerID: toPlayerID, byPlayerID: stateCopy.currentPlayerID))
+            try giveHint(hint: hint, toPlayerID: toPlayerID, gameState: &stateCopy, events: &events)
         }
+
+        // Check if we have completed the final round of the game
+        advanceFinalRoundCounterIfNeeded(gameState: &stateCopy)
+
+        events.append(stateCopy.isCompleted ? .gameEnded : .turnAdvanced)
+
+        appendHistory(
+            for: gameAction,
+            playerID: actingPlayerID,
+            events: events,
+            gameState: &stateCopy
+        )
 
         // Assuming we haven't thrown an error, advance to next turn
         stateCopy.turnCounter += 1
@@ -44,85 +51,115 @@ public enum GameEngine {
 
     // MARK: - Primary Actions
 
-    // MARK: Play Card
-    internal static func playCard(cardID: Card.ID, gameState: GameState) throws(GameEngineError) -> GameState {
-        var stateCopy = gameState
+    // MARK: Deal Hands
+    internal static func dealCards(
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
+        let playerCount = gameState.playerOrder.count
+        let handSize = Rules.cardsPerPlayer(players: playerCount)
 
+        let cardsToDeal = playerCount * handSize
+        var cardsDealt: Int = 0
+
+        while cardsDealt < cardsToDeal {
+            let playerID = gameState.playerOrder[cardsDealt % playerCount]
+            try drawCard(playerID: playerID, gameState: &gameState, events: &events)
+            cardsDealt += 1
+        }
+    }
+
+    // MARK: Play Card
+    internal static func playCard(
+        cardID: Card.ID,
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
         // Get card via Card ID and CardStore
-        let card = stateCopy.cardStore[cardID]
+        let card = gameState.cardStore[cardID]
+        let currentPlayerID = gameState.currentPlayerID
 
         // Card is removed from hand, irrelevant whether it can be played
-        stateCopy = try removeCardFromHand(
+        try removeCardFromHand(
             cardID: cardID,
-            playerID: gameState.currentPlayerID,
-            gameState: gameState
+            playerID: currentPlayerID,
+            gameState: &gameState
         )
 
-        let (cardWasPlayed, updatedState) = try attemptAddCardToTableau(card: card, gameState: stateCopy)
-        stateCopy = updatedState
+        let cardWasPlayed = addCardToTableauIfPlayable(
+            card: card,
+            playerID: currentPlayerID,
+            gameState: &gameState,
+            events: &events
+        )
 
         if cardWasPlayed {
             // Award a hint if this card completed the stack
-            let stackWasCompleted = stackIsComplete(for: card.color, gameState: stateCopy)
+            let stackWasCompleted = stackIsComplete(for: card.color, gameState: gameState)
             if stackWasCompleted {
-                stateCopy = maybeGainHint(gameState: stateCopy)
+                gainHintIfPossible(gameState: &gameState, events: &events)
             }
         } else {
             // Card is sent to discard pile
-            stateCopy = try moveCardToDiscard(cardID: cardID, gameState: stateCopy)
+            try moveCardToDiscard(
+                cardID: cardID,
+                playerID: currentPlayerID,
+                gameState: &gameState,
+                events: &events
+            )
 
             // Life is burned
-            stateCopy = try loseStrike(gameState: stateCopy)
+            loseStrike(gameState: &gameState, events: &events)
         }
 
         // Player must draw a new card
-        stateCopy = try drawCard(gameState: stateCopy)
-
-        return stateCopy
+        try drawCard(playerID: currentPlayerID, gameState: &gameState, events: &events)
     }
 
     // MARK: Discard
     /// Handles removing the card from the player's hand and adding it to the discard pile
     internal static func discard(
         cardID: Card.ID,
-        gameState: GameState
-    ) throws(GameEngineError) -> GameState {
-        var stateCopy = gameState
-
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
+        let currentPlayerID = gameState.currentPlayerID
         // Card is removed from the player's hand
-        stateCopy = try removeCardFromHand(
+        try removeCardFromHand(
             cardID: cardID,
-            playerID: stateCopy.currentPlayerID,
-            gameState: stateCopy
+            playerID: currentPlayerID,
+            gameState: &gameState
         )
 
         // And sent to discard pile
-        stateCopy = try moveCardToDiscard(cardID: cardID, gameState: stateCopy)
+        try moveCardToDiscard(
+            cardID: cardID,
+            playerID: currentPlayerID,
+            gameState: &gameState,
+            events: &events
+        )
 
         // Reward a hint for the discard
-        stateCopy = maybeGainHint(gameState: stateCopy)
+        gainHintIfPossible(gameState: &gameState, events: &events)
 
         // Player must draw a new card
-        stateCopy = try drawCard(gameState: stateCopy)
-
-        return stateCopy
+        try drawCard(playerID: currentPlayerID, gameState: &gameState, events: &events)
     }
 
     // MARK: Give Hint
     internal static func giveHint(
         hint: Hint,
         toPlayerID: Player.ID,
-        gameState: GameState
-    ) throws(GameEngineError) -> GameState {
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
         guard 0 < gameState.hintTokens else { throw .outOfHintTokens }
         if gameState.currentPlayerID == toPlayerID { throw .attemptedSelfHint(playerID: toPlayerID) }
 
-        var stateCopy = gameState
-
         // Create an array of IDs for the player's hand where the card matches the type and value of the hint given
-        let filteredHandIDs = stateCopy.hands[toPlayerID, default: []]
+        let filteredHandIDs = gameState.hands[toPlayerID, default: []]
             // Get card info via IDs
-            .map { stateCopy.cardStore[$0] }
+            .map { gameState.cardStore[$0] }
             // Filter cards based on the type and value of the hint
             .filter { card in
                 switch hint {
@@ -146,7 +183,7 @@ public enum GameEngine {
         }
 
         // Add IDs to the knowledge store.
-        let addedNewIDs = stateCopy.knowledgeStore.addAndCheckIDs(
+        let addedNewIDs = gameState.knowledgeStore.addAndCheckIDs(
             ids: filteredHandIDs,
             for: kind
         )
@@ -157,41 +194,45 @@ public enum GameEngine {
         }
 
         // If hint was valid, expend token
-        stateCopy.hintTokens -= 1
-
-        return stateCopy
+        gameState.hintTokens -= 1
+        events.append(.hintGiven(hint: hint, toPlayerID: toPlayerID, byPlayerID: gameState.currentPlayerID))
+        events.append(.hintTokensSet(gameState.hintTokens))
     }
 
+    internal static func advanceFinalRoundCounterIfNeeded(gameState: inout GameState) {
+        guard gameState.isFinalRound else { return }
+        guard gameState.finalRoundTurnCounter < gameState.numberOfPlayers else { return }
+        gameState.finalRoundTurnCounter += 1
+    }
 
     // MARK: - Helpers
     internal static func removeCardFromHand(
         cardID: Card.ID,
         playerID: Player.ID,
-        gameState: GameState
-    ) throws(GameEngineError) -> GameState {
+        gameState: inout GameState
+    ) throws(GameEngineError) {
         let handContainsCard = gameState.hands[playerID]?.contains(cardID) ?? false
         guard handContainsCard else {
             throw .cardNotInHand(cardID: cardID, playerID: playerID)
         }
 
-        var stateCopy = gameState
-        stateCopy.hands[playerID]?
+        gameState.hands[playerID]?
             .removeAll(where: { $0 == cardID })
-        return stateCopy
     }
 
     
-    /// Attempts to add the card to the tableau. Response includes a Bool representing whether the play was legal or not, and the updated GameState.
+    /// Attempts to add the card to the tableau and returns whether the play was legal.
     ///
     /// - Parameters:
     ///   - card: The card being played.
     ///   - gameState: The current state of the game.
-    /// - Returns: A Bool representing whether the play was legal or not, and the updated GameState.
-    internal static func attemptAddCardToTableau(
+    /// - Returns: A Bool representing whether the play was legal or not.
+    internal static func addCardToTableauIfPlayable(
         card: Card,
-        gameState: GameState
-    ) throws(GameEngineError) -> (Bool, GameState) {
-        
+        playerID: Player.ID,
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) -> Bool {
         // Check if card can be played legally
         let cardIsPlayable = isCardPlayable(
             card: card,
@@ -199,12 +240,12 @@ public enum GameEngine {
         )
 
         if cardIsPlayable {
-            var stateCopy = gameState
             // Add the card to the stack
-            stateCopy.stacks[card.color, default: []].append(card.id)
-            return (true, stateCopy)
+            gameState.stacks[card.color, default: []].append(card.id)
+            events.append(.cardPlayed(cardID: card.id, playerID: playerID))
+            return true
         } else {
-            return (false, gameState)
+            return false
         }
     }
 
@@ -215,11 +256,15 @@ public enum GameEngine {
         return highestCardValue == stackHeight
     }
 
-    internal static func moveCardToDiscard(cardID: Card.ID, gameState: GameState) throws(GameEngineError) -> GameState {
-        var stateCopy = gameState
-        let inserted = stateCopy.discardPile.append(cardID).inserted
+    internal static func moveCardToDiscard(
+        cardID: Card.ID,
+        playerID: Player.ID,
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
+        let inserted = gameState.discardPile.append(cardID).inserted
         if inserted {
-            return stateCopy
+            events.append(.cardDiscarded(cardID: cardID, playerID: playerID))
         } else {
             throw .illegalDiscard(cardID: cardID)
         }
@@ -236,43 +281,57 @@ public enum GameEngine {
         return stackHeight == numberValue - 1
     }
 
-    internal static func loseStrike(gameState: GameState) throws(GameEngineError) -> GameState {
-        var stateCopy = gameState
-        stateCopy.strikes -= 1
-
-        if stateCopy.strikes <= 0 {
-            throw .gameOver(reason: .lastStrike, finalState: stateCopy)
-        }
-
-        return stateCopy
+    internal static func loseStrike(gameState: inout GameState, events: inout [GameEvent]) {
+        gameState.strikes -= 1
+        events.append(.strikeLost)
     }
 
     /// Draws a card for the current player and returns the updated state.
-    internal static func drawCard(gameState: GameState) throws(GameEngineError) -> GameState {
-        guard !gameState.deck.isEmpty else { return gameState }
-
-        let currentPlayerID = gameState.currentPlayerID
+    internal static func drawCard(
+        playerID: Player.ID,
+        gameState: inout GameState,
+        events: inout [GameEvent]
+    ) throws(GameEngineError) {
+        guard !gameState.deckOrder.isEmpty else { return }
 
         // Make sure the player's hand is not already full, else throw an error.
-        let playerHandSize = gameState.hands[currentPlayerID, default: []].count
+        let playerHandSize = gameState.hands[playerID, default: []].count
         let maxHandSize = Rules.cardsPerPlayer(players: gameState.playerOrder.count)
         guard playerHandSize < maxHandSize else {
-            throw .exceededHandLimit(playerId: gameState.currentPlayerID)
+            throw .exceededHandLimit(playerId: playerID)
         }
 
-        var stateCopy = gameState
+        let topCardID = gameState.deckOrder.removeLast()
+        gameState.hands[playerID, default: []].append(topCardID)
+        events.append(.cardDrawn(cardID: topCardID, playerID: playerID))
 
-        let topCardID = stateCopy.deck.removeLast()
-        stateCopy.hands[currentPlayerID, default: []].append(topCardID)
-        stateCopy.history.append(.drawn(cardID: topCardID, playerID: currentPlayerID))
-        return stateCopy
+        // Check if this was the last card and we have entered our final round
+        if gameState.deckOrder.isEmpty {
+            gameState.isFinalRound = true
+            events.append(.finalRoundStarted)
+        }
     }
 
     /// Returns a hint token to the players if they do not already have the maximum allowed.
-    internal static func maybeGainHint(gameState: GameState) -> GameState {
-        guard gameState.hintTokens < Rules.maxHints else { return gameState }
-        var stateCopy = gameState
-        stateCopy.hintTokens += 1
-        return stateCopy
+    internal static func gainHintIfPossible(gameState: inout GameState, events: inout [GameEvent]) {
+        guard gameState.hintTokens < Rules.maxHints else { return }
+        gameState.hintTokens += 1
+        events.append(.hintTokensSet(gameState.hintTokens))
+    }
+
+    // MARK: - History
+    internal static func appendHistory(
+        for action: GameAction,
+        playerID: Player.ID,
+        events: [GameEvent],
+        gameState: inout GameState
+    ) {
+        gameState.turnRecord.append(
+            TurnRecord(
+                playerID: playerID,
+                action: action,
+                events: events
+            )
+        )
     }
 }

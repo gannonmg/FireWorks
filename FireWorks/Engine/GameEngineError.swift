@@ -13,6 +13,24 @@ public enum GameEngineError: Error {
     case illegalDiscard(cardID: Card.ID)
     case outOfHintTokens
     case attemptedSelfHint(playerID: Player.ID)
+
+
+    var localizedDescription: String {
+        switch self {
+        case .invalidHint(let reason):
+            "Invalid Hint: \(String(describing: reason))"
+        case .exceededHandLimit(let playerId):
+            "Player Exceeded Hand Limit - ID \(playerId)"
+        case .cardNotInHand(let cardID, let playerID):
+            "Attempted to play card not in hand. CardID: \(cardID). PlayerID: \(playerID)"
+        case .illegalDiscard(let cardID):
+            "Attempted to discard a card that already existed in the discard pile. CardID: \(cardID)"
+        case .outOfHintTokens:
+            "Attempted to give a hint when no hints remained."
+        case .attemptedSelfHint(let playerID):
+            "Attempted to give a hint to the current player \(playerID)"
+        }
+    }
 }
 
 public enum InvalidHintReason: Hashable, Sendable {

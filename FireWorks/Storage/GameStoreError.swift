@@ -9,4 +9,11 @@ import Foundation
 
 enum GameStoreError: Error {
     case gameNotFound(id: GameID)
+
+    var localizedDescription: String {
+        switch self {
+        case .gameNotFound(let id):
+            "Could not find game with ID: \(id)"
+        }
+    }
 }

@@ -10,6 +10,15 @@ import Observation
 enum GameSessionError: Error {
     case noHandForPlayer(Player.ID)
     case engineError(GameEngineError)
+
+    var localizedDescription: String {
+        switch self {
+        case .noHandForPlayer(let id):
+            "Could not find a hind for player id \(id)"
+        case .engineError(let gameEngineError):
+            "Received engine error \(gameEngineError.localizedDescription)"
+        }
+    }
 }
 
 @Observable
